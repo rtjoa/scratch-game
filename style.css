@@ -177,3 +177,43 @@ body {
     transform: translateY(0);
     box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
 }
+
+.difficulty-panel {
+    position: absolute;
+    top: -70px;
+    right: 0;
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
+
+.difficulty-btn {
+    background: linear-gradient(45deg, #2ecc71, #27ae60);
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+    min-width: 120px;
+}
+
+.difficulty-btn.hard-mode {
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+}
+
+.difficulty-btn:hover {
+    transform: translateY(-2px);
+}
+
+.difficulty-btn.hard-mode:hover {
+    box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+}
+
+.difficulty-btn:active {
+    transform: translateY(0);
+}

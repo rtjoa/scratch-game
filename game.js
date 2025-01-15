@@ -6,8 +6,31 @@ const gameOverScreen = document.getElementById('game-over');
 const energyFill = document.getElementById('energy-fill');
 const gameContainer = document.querySelector('.game-container');
 
+// Difficulty settings
+const DIFFICULTY = {
+    easy: {
+        dogSpeed: 60,      // pixels per second
+        maxEnergy: 150,
+        energyGain: 25,
+        energyDecay: 0.05,
+        dogDamage: 10,
+        obstacleDamage: 5
+    },
+    hard: {
+        dogSpeed: 100,     // pixels per second
+        maxEnergy: 100,
+        energyGain: 15,
+        energyDecay: 0.1,
+        dogDamage: 20,
+        obstacleDamage: 10
+    }
+};
+
+let currentDifficulty = 'easy';  // Default to easy mode
+let gameSettings = DIFFICULTY[currentDifficulty];
+
 let score = 0;
-let energy = 100;
+let energy = gameSettings.maxEnergy;
 let isDragging = false;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
@@ -18,31 +41,59 @@ let gameLoop;
 let catPosition = { x: 300, y: 200 };
 let foodPosition = { x: 0, y: 0 };
 let gameStarted = false;
+let lastTime = 0;
 
 // Game configuration
-const ENERGY_DECAY = 0.1;
-const ENERGY_GAIN = 15;
 const OBSTACLE_COUNT = 5;
 const DOG_COUNT = 3;
 const OBSTACLE_TYPES = ['🌳', '🪨', '🌵'];
-const BASE_DOG_SPEED = 1.2;
-const FISH_SPEED = 2;
+const FISH_SPEED = 150;     // pixels per second
 const DETECTION_RADIUS = 200;
 const FISH_PREDICTION_FACTOR = 100;
 const DOG_EASING = 0.05;
 
-// Initialize game elements without starting the game loop
+// Add difficulty toggle handling
+const difficultyToggle = document.getElementById('difficulty-toggle');
+
+function toggleDifficulty() {
+    const newDifficulty = currentDifficulty === 'easy' ? 'hard' : 'easy';
+    setDifficulty(newDifficulty);
+    difficultyToggle.textContent = `${newDifficulty.charAt(0).toUpperCase() + newDifficulty.slice(1)} Mode`;
+
+    // Update button style
+    if (newDifficulty === 'hard') {
+        difficultyToggle.classList.add('hard-mode');
+    } else {
+        difficultyToggle.classList.remove('hard-mode');
+    }
+}
+
+difficultyToggle.addEventListener('click', toggleDifficulty);
+
+function setDifficulty(difficulty) {
+    currentDifficulty = difficulty;
+    gameSettings = DIFFICULTY[difficulty];
+    // If game is in progress, restart with new settings
+    if (gameStarted) {
+        restartGame();
+    } else {
+        initGame();
+    }
+}
+
+// Update initGame to use difficulty settings
 function initGame() {
     // Reset game state
     score = 0;
-    energy = 100;
+    energy = gameSettings.maxEnergy;
     gameStarted = false;
     scoreElement.textContent = '0';
     gameOverScreen.style.display = 'none';
+    energyFill.style.width = '100%';
 
     // Clear existing game loop if any
     if (gameLoop) {
-        clearInterval(gameLoop);
+        cancelAnimationFrame(gameLoop);
         gameLoop = null;
     }
 
@@ -54,16 +105,7 @@ function initGame() {
     updateEnergyBar();
 }
 
-// Start the actual game
-function startGame() {
-    if (!gameStarted) {
-        gameStarted = true;
-        spawnDogs();
-        // Start game loop
-        gameLoop = setInterval(updateGame, 16); // ~60fps
-    }
-}
-
+// Update spawnDogs to use difficulty settings
 function spawnDogs() {
     // Clear existing dogs
     dogs.forEach(dog => dog.element.remove());
@@ -74,19 +116,19 @@ function spawnDogs() {
         {
             emoji: '🐕',
             behavior: 'chase',
-            speed: BASE_DOG_SPEED,
+            speed: gameSettings.dogSpeed,
             position: { x: 0, y: 0 }
         },
         {
             emoji: '🐕‍🦺',
             behavior: 'ambush',
-            speed: BASE_DOG_SPEED * 1.2,
+            speed: gameSettings.dogSpeed * 1.2,
             position: { x: gameContainer.clientWidth - 40, y: gameContainer.clientHeight - 40 }
         },
         {
             emoji: '🦮',
             behavior: 'patrol',
-            speed: BASE_DOG_SPEED * 0.8,
+            speed: gameSettings.dogSpeed * 0.8,
             position: { x: gameContainer.clientWidth / 2, y: 0 },
             patrolPoints: [
                 { x: gameContainer.clientWidth / 2, y: 0 },
@@ -118,17 +160,24 @@ function spawnDogs() {
     });
 }
 
-function updateGame() {
+function updateGame(timestamp) {
     if (energy <= 0) return;
 
+    // Calculate delta time in seconds
+    const deltaTime = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+
     // Update dogs
-    updateDogs();
+    updateDogs(deltaTime);
 
     // Update fish movement
-    updateFish();
+    updateFish(deltaTime);
+
+    // Request next frame
+    gameLoop = requestAnimationFrame(updateGame);
 }
 
-function updateDogs() {
+function updateDogs(deltaTime) {
     dogs.forEach(dog => {
         let targetX, targetY;
         const distanceToCat = Math.hypot(catPosition.x - dog.x, catPosition.y - dog.y);
@@ -189,10 +238,10 @@ function updateDogs() {
         const distance = Math.hypot(dx, dy);
 
         if (distance > 0) {
-            // Add smooth movement with easing
-            const easing = DOG_EASING;
-            const moveX = dx * easing * dog.speed;
-            const moveY = dy * easing * dog.speed;
+            // Calculate movement based on deltaTime
+            const moveSpeed = dog.speed * deltaTime;
+            const moveX = (dx / distance) * moveSpeed;
+            const moveY = (dy / distance) * moveSpeed;
 
             // Calculate new position
             let newX = dog.x + moveX;
@@ -212,9 +261,9 @@ function updateDogs() {
                 dog.x = newX;
                 dog.y = newY;
             } else {
-                // Try to move around obstacle with smoother movement
-                const perpX = -dy / distance * dog.speed * easing;
-                const perpY = dx / distance * dog.speed * easing;
+                // Try to move around obstacle
+                const perpX = -dy / distance * moveSpeed;
+                const perpY = dx / distance * moveSpeed;
                 dog.x += perpX;
                 dog.y += perpY;
             }
@@ -223,7 +272,7 @@ function updateDogs() {
             dog.x = Math.max(0, Math.min(dog.x, gameContainer.clientWidth - 40));
             dog.y = Math.max(0, Math.min(dog.y, gameContainer.clientHeight - 40));
 
-            // Update DOM position (removed rotation)
+            // Update DOM position
             dog.element.style.left = dog.x + 'px';
             dog.element.style.top = dog.y + 'px';
 
@@ -242,12 +291,12 @@ function updateDogs() {
                 dogRect.left > adjustedCatRect.right ||
                 dogRect.bottom < adjustedCatRect.top ||
                 dogRect.top > adjustedCatRect.bottom)) {
-                energy = Math.max(0, energy - 20);
+                energy = Math.max(0, energy - gameSettings.dogDamage);
                 updateEnergyBar();
 
                 // Bounce the dog back with easing
-                dog.x -= (dx / distance) * 50 * easing;
-                dog.y -= (dy / distance) * 50 * easing;
+                dog.x -= (dx / distance) * 50 * DOG_EASING;
+                dog.y -= (dy / distance) * 50 * DOG_EASING;
 
                 // Keep within bounds after bounce
                 dog.x = Math.max(0, Math.min(dog.x, gameContainer.clientWidth - 40));
@@ -257,14 +306,15 @@ function updateDogs() {
     });
 }
 
-function updateFish() {
-    // Calculate distance to cat
+function updateFish(deltaTime) {
     const dx = catPosition.x - foodPosition.x;
     const dy = catPosition.y - foodPosition.y;
     const distance = Math.hypot(dx, dy);
 
-    // If cat is within detection radius, move fish away
     if (distance < DETECTION_RADIUS) {
+        // Calculate movement based on deltaTime
+        const moveSpeed = FISH_SPEED * deltaTime;
+
         // Predict cat's future position based on its current direction
         const catDirectionX = lastDirection === 'right' ? 1 : -1;
         const predictedCatX = catPosition.x + (catDirectionX * FISH_PREDICTION_FACTOR);
@@ -279,8 +329,8 @@ function updateFish() {
         let newY = foodPosition.y;
 
         if (escapeDistance > 0) {
-            newX += ((escapeX - foodPosition.x) / escapeDistance) * FISH_SPEED;
-            newY += ((escapeY - foodPosition.y) / escapeDistance) * FISH_SPEED;
+            newX += ((escapeX - foodPosition.x) / escapeDistance) * moveSpeed;
+            newY += ((escapeY - foodPosition.y) / escapeDistance) * moveSpeed;
         }
 
         // Add some random movement
@@ -376,12 +426,15 @@ function gameOver() {
     isDragging = false;
     finalScoreElement.textContent = score;
     gameOverScreen.style.display = 'block';
-    clearInterval(gameLoop);
+    if (gameLoop) {
+        cancelAnimationFrame(gameLoop);
+        gameLoop = null;
+    }
 }
 
 function restartGame() {
     score = 0;
-    energy = 100;
+    energy = gameSettings.maxEnergy;
     scoreElement.textContent = '0';
     gameOverScreen.style.display = 'none';
     initGame();
@@ -421,7 +474,7 @@ document.addEventListener('mousemove', (e) => {
     positionCat(x, y);
     checkCollision();
 
-    energy = Math.max(0, energy - ENERGY_DECAY);
+    energy = Math.max(0, energy - gameSettings.energyDecay);
     updateEnergyBar();
 });
 
@@ -473,7 +526,7 @@ function checkCollision() {
         score++;
         scoreElement.textContent = score;
         // Gain energy when eating
-        energy = Math.min(100, energy + ENERGY_GAIN);
+        energy = Math.min(gameSettings.maxEnergy, energy + gameSettings.energyGain);
         updateEnergyBar();
 
         // Change cat emoji to eating expression briefly
@@ -493,7 +546,7 @@ function checkCollision() {
             adjustedCatRect.bottom < obsRect.top ||
             adjustedCatRect.top > obsRect.bottom)) {
             // Hitting obstacles costs energy
-            energy = Math.max(0, energy - 10);
+            energy = Math.max(0, energy - gameSettings.obstacleDamage);
             updateEnergyBar();
             // Visual feedback for hitting obstacle
             obstacle.element.style.transform = 'scale(1.2)';
@@ -502,6 +555,16 @@ function checkCollision() {
             }, 200);
             break;
         }
+    }
+}
+
+function startGame() {
+    if (!gameStarted) {
+        gameStarted = true;
+        spawnDogs();
+        lastTime = performance.now();
+        // Start game loop using requestAnimationFrame
+        gameLoop = requestAnimationFrame(updateGame);
     }
 }
 
