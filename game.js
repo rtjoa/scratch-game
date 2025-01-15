@@ -9,20 +9,20 @@ const gameContainer = document.querySelector('.game-container');
 // Difficulty settings
 const DIFFICULTY = {
     easy: {
-        dogSpeed: 60,      // pixels per second
-        maxEnergy: 150,
-        energyGain: 25,
-        energyDecay: 0.05,
-        dogDamage: 10,
-        obstacleDamage: 5
+        speedMultiplier: 1,
+        maxEnergy: 300,        // 3x energy
+        energyGain: 50,        // Faster energy gain from fish
+        energyDecay: 0.03,     // Slower energy decay
+        dogDamage: 20,
+        obstacleDamage: 10
     },
     hard: {
-        dogSpeed: 100,     // pixels per second
+        speedMultiplier: 1.5,
         maxEnergy: 100,
         energyGain: 15,
         energyDecay: 0.1,
-        dogDamage: 20,
-        obstacleDamage: 10
+        dogDamage: 30,
+        obstacleDamage: 15
     }
 };
 
@@ -493,21 +493,22 @@ function spawnDogs() {
             // For crabs, initialize direction
             let direction = { x: 0, y: 0 };
             if (dogType.type === 'crab') {
-                // Random diagonal direction
                 direction = {
                     x: Math.random() < 0.5 ? 1 : -1,
                     y: Math.random() < 0.5 ? 1 : -1
                 };
             }
 
+            // Base speed is 100 pixels per second, modified by dog type speed multiplier
+            const baseSpeed = 100;
             dogs.push({
                 element: dog,
                 x: x,
                 y: y,
-                speed: gameSettings.dogSpeed * dogType.speed,
+                speed: baseSpeed * dogType.speed,
                 behavior: dogType.type,
                 emoji: dogType.emoji,
-                direction: direction  // Add direction for crabs
+                direction: direction
             });
         }
     });
@@ -528,7 +529,7 @@ function spawnBoss() {
         element: boss,
         x: bossX,
         y: bossY,
-        speed: gameSettings.dogSpeed * 2,
+        speed: 200,  // Base boss speed
         behavior: 'boss',
         health: 5,
         chargeTimer: 0,
@@ -537,8 +538,8 @@ function spawnBoss() {
 }
 
 function updateDogs(deltaTime) {
-    // Calculate speed multiplier based on score
-    const speedMultiplier = Math.min(1 + (score / 30), 2);  // 2x speed at score 30
+    // Calculate speed multiplier based on score and difficulty
+    let speedMultiplier = Math.min(1 + (score / 30), 2) * gameSettings.speedMultiplier;
 
     dogs.forEach(dog => {
         // Skip if dog is paused (during win screen)
@@ -734,7 +735,12 @@ function updateFish(deltaTime) {
     const distance = Math.hypot(dx, dy);
 
     if (distance < DETECTION_RADIUS) {
-        const moveSpeed = fishType.speed * deltaTime;
+        // Apply difficulty and boss level multipliers
+        let speedMultiplier = gameSettings.speedMultiplier;
+        if (currentLevel === 5) {  // Boss level
+            speedMultiplier *= 1.5;  // Additional 1.5x speed in boss level
+        }
+        const moveSpeed = fishType.speed * deltaTime * speedMultiplier;
         let newX = foodPosition.x;
         let newY = foodPosition.y;
 
@@ -884,7 +890,10 @@ function positionCat(x, y) {
 }
 
 function updateEnergyBar() {
-    energyFill.style.width = `${energy}%`;
+    // Use requestAnimationFrame for smooth visual updates
+    requestAnimationFrame(() => {
+        energyFill.style.width = `${(energy / gameSettings.maxEnergy) * 100}%`;
+    });
 
     if (energy <= 0) {
         gameOver();
@@ -1055,14 +1064,16 @@ function checkCollision() {
             adjustedCatRect.left > obsRect.right ||
             adjustedCatRect.bottom < obsRect.top ||
             adjustedCatRect.top > obsRect.bottom)) {
-            // Hitting obstacles costs energy
+
+            // Apply damage and update immediately
             energy = Math.max(0, energy - gameSettings.obstacleDamage);
             updateEnergyBar();
-            // Visual feedback for hitting obstacle
+
+            // Visual feedback for obstacle
             obstacle.element.style.transform = 'scale(1.2)';
             setTimeout(() => {
                 obstacle.element.style.transform = 'scale(1)';
-            }, 200);
+            }, 100);
             break;
         }
     }
