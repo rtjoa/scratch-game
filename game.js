@@ -223,16 +223,25 @@ function updateDogs() {
             dog.x = Math.max(0, Math.min(dog.x, gameContainer.clientWidth - 40));
             dog.y = Math.max(0, Math.min(dog.y, gameContainer.clientHeight - 40));
 
-            // Update DOM position with transform for smoother rendering
-            dog.element.style.transform = `translate3d(${dog.x}px, ${dog.y}px, 0) scaleX(${dx > 0 ? 1 : -1})`;
+            // Update DOM position (removed rotation)
+            dog.element.style.left = dog.x + 'px';
+            dog.element.style.top = dog.y + 'px';
 
-            // Check collision with cat
+            // Check collision with cat with padding
             const dogRect = dog.element.getBoundingClientRect();
             const catRect = cat.getBoundingClientRect();
-            if (!(dogRect.right < catRect.left ||
-                dogRect.left > catRect.right ||
-                dogRect.bottom < catRect.top ||
-                dogRect.top > catRect.bottom)) {
+            const padding = 10;
+            const adjustedCatRect = {
+                left: catRect.left + padding,
+                right: catRect.right - padding,
+                top: catRect.top + padding,
+                bottom: catRect.bottom - padding
+            };
+
+            if (!(dogRect.right < adjustedCatRect.left ||
+                dogRect.left > adjustedCatRect.right ||
+                dogRect.bottom < adjustedCatRect.top ||
+                dogRect.top > adjustedCatRect.bottom)) {
                 energy = Math.max(0, energy - 20);
                 updateEnergyBar();
 
@@ -353,12 +362,6 @@ function positionCat(x, y) {
     catPosition.y = y;
     cat.style.left = x + 'px';
     cat.style.top = y + 'px';
-
-    // Calculate initial angle to fish
-    const dx = foodPosition.x - x;
-    const dy = foodPosition.y - y;
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI) - 90;
-    cat.style.transform = `rotate(${angle}deg)`;
 }
 
 function updateEnergyBar() {
@@ -408,12 +411,6 @@ document.addEventListener('mousemove', (e) => {
     const x = e.clientX - rect.left - dragOffsetX;
     const y = e.clientY - rect.top - dragOffsetY;
 
-    // Calculate angle to fish and rotate cat to look at it
-    const dx = foodPosition.x - catPosition.x;
-    const dy = foodPosition.y - catPosition.y;
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI) - 90; // Subtract 90 to make face point at fish
-    cat.style.transform = `rotate(${angle}deg)`;
-
     // Keep track of direction for fish prediction
     if (x > catPosition.x) {
         lastDirection = 'right';
@@ -459,29 +456,30 @@ function checkCollision() {
     const catRect = cat.getBoundingClientRect();
     const foodRect = food.getBoundingClientRect();
 
+    // Add padding to make hitboxes less sensitive
+    const padding = 10;
+    const adjustedCatRect = {
+        left: catRect.left + padding,
+        right: catRect.right - padding,
+        top: catRect.top + padding,
+        bottom: catRect.bottom - padding
+    };
+
     // Check collision with food
-    if (!(catRect.right < foodRect.left ||
-        catRect.left > foodRect.right ||
-        catRect.bottom < foodRect.top ||
-        catRect.top > foodRect.bottom)) {
+    if (!(adjustedCatRect.right < foodRect.left ||
+        adjustedCatRect.left > foodRect.right ||
+        adjustedCatRect.bottom < foodRect.top ||
+        adjustedCatRect.top > foodRect.bottom)) {
         score++;
         scoreElement.textContent = score;
         // Gain energy when eating
         energy = Math.min(100, energy + ENERGY_GAIN);
         updateEnergyBar();
 
-        // Store current rotation
-        const currentRotation = cat.style.transform;
-
         // Change cat emoji to eating expression briefly
         cat.textContent = '😺';
-        // Maintain rotation
-        cat.style.transform = currentRotation;
-
         setTimeout(() => {
             cat.textContent = '🐱';
-            // Maintain rotation after animation
-            cat.style.transform = currentRotation;
         }, 500);
 
         moveFood();
@@ -490,10 +488,10 @@ function checkCollision() {
     // Check collision with obstacles
     for (const obstacle of obstacles) {
         const obsRect = obstacle.element.getBoundingClientRect();
-        if (!(catRect.right < obsRect.left ||
-            catRect.left > obsRect.right ||
-            catRect.bottom < obsRect.top ||
-            catRect.top > obsRect.bottom)) {
+        if (!(adjustedCatRect.right < obsRect.left ||
+            adjustedCatRect.left > obsRect.right ||
+            adjustedCatRect.bottom < obsRect.top ||
+            adjustedCatRect.top > obsRect.bottom)) {
             // Hitting obstacles costs energy
             energy = Math.max(0, energy - 10);
             updateEnergyBar();
